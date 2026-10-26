@@ -30,6 +30,9 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
       </p>
       {error && <div className="as-banner is-error">That sign-in link is invalid or expired. Request a new one.</div>}
       <LoginForm supabaseUrl={env.supabaseUrl} supabaseAnonKey={env.supabaseAnonKey} appUrl={env.appUrl} google={google} />
+      <p className="as-hint" style={{ margin: 0 }}>
+        Just looking? <a href="/demo">Try the demo</a> with sample meetings and tasks, no sign-in needed.
+      </p>
     </main>
   );
 }
