@@ -90,6 +90,8 @@ export interface TaskPlan {
   status: TaskPlanStatus;
   /** Work already behind us (past blocks + elapsed part of the current block). */
   workedMinutes: number;
+  /** Rest of the block that is running right now (kept as is when re-planning). */
+  lockedMinutes: number;
   /** Minutes still to place (after worked + locked in-progress time). */
   remainingMinutes: number;
   scheduledMinutes: number;

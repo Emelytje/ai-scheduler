@@ -2,16 +2,21 @@ import { TZDate } from "@date-fns/tz";
 import type { CalendarEvent, Priority, Task } from "./types";
 
 /**
- * Deterministic demo data: one working week of meetings and 20 tasks, anchored to the
- * Monday of the week containing `now`. Used by the demo mode and the acceptance tests.
+ * Deterministic demo data: five working days of meetings and 20 tasks. Day 0 is the local
+ * date of `anchor` (should be a weekday); later days skip weekends. Used by the demo mode
+ * and the acceptance tests.
  */
-export function buildSeed(now: Date, timezone: string): { events: CalendarEvent[]; tasks: Task[] } {
-  const local = new TZDate(now.getTime(), timezone);
-  const mondayOffset = (local.getDay() + 6) % 7;
-  const base = { y: local.getFullYear(), m: local.getMonth(), d: local.getDate() - mondayOffset };
+export function buildSeed(anchor: Date, timezone: string): { events: CalendarEvent[]; tasks: Task[] } {
+  const local = new TZDate(anchor.getTime(), timezone);
+  const dates: TZDate[] = [];
+  for (let i = 0; dates.length < 5; i++) {
+    const d = new TZDate(local.getFullYear(), local.getMonth(), local.getDate() + i, 0, 0, 0, timezone);
+    if (d.getDay() !== 0 && d.getDay() !== 6) dates.push(d);
+  }
   const at = (day: number, hhmm: string) => {
     const [h, mi] = hhmm.split(":").map(Number);
-    return new Date(new TZDate(base.y, base.m, base.d + day, h, mi, 0, timezone).getTime()).toISOString();
+    const d = dates[day];
+    return new Date(new TZDate(d.getFullYear(), d.getMonth(), d.getDate(), h, mi, 0, timezone).getTime()).toISOString();
   };
 
   const events: CalendarEvent[] = [];
@@ -83,8 +88,8 @@ export function buildSeed(now: Date, timezone: string): { events: CalendarEvent[
     task("t17", "Retro notes and actions", 30, "medium", at(4, "17:00"), { notBefore: at(4, "15:00") }),
     task("t18", "Proposal for Janssens extension", 180, "high", at(2, "12:00")),
     task("t19", "Weekly report to management", 45, "medium", at(4, "16:00")),
-    // Intentionally impossible: 4h of work due before the first meeting block ends.
-    task("t20", "Full permit dossier (rush)", 240, "urgent", at(0, "11:00")),
+    // Intentionally impossible: a full day of work due at 11:00 on day 0.
+    task("t20", "Full permit dossier (rush)", 480, "urgent", at(0, "11:00")),
   ];
 
   return { events, tasks };

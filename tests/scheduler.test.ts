@@ -1,6 +1,6 @@
 import { TZDate } from "@date-fns/tz";
 import { describe, expect, it } from "vitest";
-import { findConflicts, placeTask, plan } from "@/lib/scheduler/engine";
+import { estimateAfterOverrun, findConflicts, placeTask, plan } from "@/lib/scheduler/engine";
 import { buildSeed } from "@/lib/scheduler/seed";
 import { MINUTE, subtract, workingWindows } from "@/lib/scheduler/time";
 import {
@@ -409,6 +409,17 @@ describe("replanning", () => {
     expect(r.plans.a.status).toBe("on_track");
     expect(r.plans.b.status).toBe("on_track");
     expect(r.diff.updated.length).toBeGreaterThan(0);
+  });
+
+  it("adds reported extra time on top of the plan, before or after the estimate is used up", () => {
+    const now = local(2026, 10, 26, 9, 0);
+    const a = task("a", 60);
+    const notStarted = plan({ tasks: [a], events: [], previousBlocks: [], settings, now });
+    expect(estimateAfterOverrun(a, notStarted.plans.a, 30)).toBe(90);
+    // At 10:30 the 09:00–10:00 block is over and a is not done: the overrun allowance is replaced.
+    const overran = plan({ tasks: [a], events: [], previousBlocks: notStarted.blocks, settings, now: local(2026, 10, 26, 10, 30) });
+    expect(overran.plans.a.overrun).toBe(true);
+    expect(estimateAfterOverrun(a, overran.plans.a, 45)).toBe(105);
   });
 
   it("keeps the block in progress and the past as history", () => {

@@ -173,6 +173,7 @@ export function plan(input: PlanInput): PlanResult {
       taskId: t.id,
       status: t.status === "done" ? "done" : "on_track",
       workedMinutes: w,
+      lockedMinutes: l,
       remainingMinutes: remaining,
       scheduledMinutes: 0,
       unscheduledMinutes: 0,
@@ -272,6 +273,14 @@ export function plan(input: PlanInput): PlanResult {
     computedAt: iso(now),
     durationMs: performance.now() - t0,
   };
+}
+
+/**
+ * New estimate when the user says a task needs `extraMinutes` more than currently planned.
+ * If the task already used up its estimate, the automatic overrun allowance is replaced.
+ */
+export function estimateAfterOverrun(task: Pick<Task, "estimateMinutes">, plan: TaskPlan, extraMinutes: number): number {
+  return Math.max(task.estimateMinutes, plan.workedMinutes + plan.lockedMinutes) + Math.max(0, extraMinutes);
 }
 
 /** Sanity check used by tests and the API: returns human readable violations. */
