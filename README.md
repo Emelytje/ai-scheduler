@@ -19,7 +19,9 @@ Stack: Next.js 16 (App Router) · TypeScript · Supabase (Postgres + Auth) · Go
 | API routes against a real Supabase project | ⚠️ Not verified | Builds and type-checks; needs a Supabase project to run |
 | Supabase Auth sign-in (magic link / Google) | ⚠️ Not verified | Needs a Supabase project |
 | Google Calendar OAuth, sync, push notifications, write-back | ⚠️ Not verified | Needs Google OAuth credentials and a public HTTPS URL |
-| CI workflow (`.github/workflows/ci.yml`) | ⚠️ Not verified | Runs on the first push |
+| CI workflow (`.github/workflows/ci.yml`) | ✅ Verified | Green on GitHub Actions: unit, database, build and browser tests |
+| Automatic database setup on deploy (`scripts/migrate.mjs`) | ✅ Verified locally | Fresh database, repeat run, database set up by hand, and no database |
+| Vercel's Supabase integration env names, live deploy | ⚠️ Not verified | The app accepts both the integration's names and the manual ones |
 
 ## How the planner decides
 
@@ -53,38 +55,40 @@ npm run build:preview    # preview-dist/index.html: the demo as one self-contain
 
 For the embed browser test, start the app with `EMBED_ALLOWED_ORIGINS=http://localhost:3200 npx next start -p 3100`, then run `E2E_URL=http://localhost:3100/ npm run test:e2e`.
 
-## Deploy (Supabase + Google + Vercel)
+## Deploy (Vercel + Supabase + Google)
 
-### 1. Supabase
-1. Create a project at supabase.com.
-2. Run `supabase/migrations/0001_init.sql` and then `0002_slack.sql`, either in the SQL editor or with `npx supabase link && npx supabase db push`.
-3. Go to **Authentication → URL Configuration**. Set Site URL to your app URL and add `https://YOUR-APP/auth/callback` to the redirect URLs.
-4. Optional: to offer "Continue with Google" sign-in, enable Google under **Authentication → Providers**. Email magic links work without this.
-5. From **Project Settings → API**, copy the project URL, the anon (publishable) key and the service role (secret) key.
+The app needs as few hand-made settings as possible:
+- **Supabase:** added through Vercel's Supabase integration, which fills in the database settings.
+- **Database tables:** created by the build (`scripts/migrate.mjs` applies any migrations that haven't run yet).
+- **App URL:** taken from Vercel (`VERCEL_PROJECT_PRODUCTION_URL`).
+- **Encryption and signing keys:** derived from the Supabase service-role key (HKDF), unless you set them yourself.
+
+### 1. Vercel and Supabase
+1. In Vercel, go to **Add New → Project**, pick the repository and deploy. Without a database it runs in demo mode.
+2. In the Vercel project, go to **Storage → Create / Connect → Supabase** (Marketplace). This creates the Supabase project and adds its environment variables to Vercel.
+3. Go to **Deployments → Redeploy**. The build creates the tables.
+4. In Supabase, go to **Authentication → URL Configuration**. Set Site URL to the app URL and add `https://YOUR-APP/auth/callback` to the redirect URLs.
 
 ### 2. Google Calendar
-1. In Google Cloud Console, create a project and enable the **Google Calendar API**.
-2. Configure the **OAuth consent screen** and add the scope `.../auth/calendar.events`. This scope is classified as *sensitive*. While the app is in "Testing", only the test users you list can connect (max. 100). Going public requires Google's verification.
-3. Under **Credentials → OAuth client ID → Web application**, add the authorized redirect URI `https://YOUR-APP/api/google/callback`.
-4. Push notifications (instant re-plans when a meeting moves) need the public HTTPS URL of the deployment. Without them, changes are picked up on load, focus, every 2 minutes in the open app, and by the daily cron job.
+1. In Google Cloud Console, enable the **Google Calendar API**.
+2. On the **OAuth consent screen**, add the scope `.../auth/calendar.events` and list your test users. This scope is *sensitive*: until Google has verified the app, at most 100 test users can connect.
+3. Create **Credentials → OAuth client ID → Web application** with the redirect URI `https://YOUR-APP/api/google/callback`.
+4. In Vercel, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, then redeploy.
 
-### 3. Vercel
-1. Import the GitHub repository in Vercel. The framework is detected as Next.js.
-2. Add the environment variables from `.env.example`:
+### 3. Optional settings
 
-| Variable | Where it comes from |
+| Variable | When |
 | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API |
-| `APP_URL` | Your production URL, e.g. `https://ai-scheduler.vercel.app` |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google Cloud → Credentials |
-| `TOKEN_ENCRYPTION_KEY` | `openssl rand -base64 32` (encrypts Google tokens at rest) |
-| `EMBED_SIGNING_SECRET` | `openssl rand -hex 32` |
-| `EMBED_ALLOWED_ORIGINS` | Origins of the host apps that may iframe `/embed`, space separated |
-| `CRON_SECRET` | `openssl rand -hex 32` (Vercel Cron sends it automatically) |
-| `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET` | Optional; see [Slack](#slack) |
+| `CRON_SECRET` | Needed for the daily job (morning summary, safety-net sync). Any long random string. |
+| `EMBED_ALLOWED_ORIGINS` | When the planner is embedded in another app: that app's origin(s), space separated |
+| `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET` | For Slack; see [Slack](#slack) |
+| `APP_URL` | Only with a custom domain that isn't the Vercel production domain |
+| `TOKEN_ENCRYPTION_KEY`, `EMBED_SIGNING_SECRET` | Only to manage keys yourself instead of deriving them. Rotating the Supabase service-role key changes derived keys, and users then reconnect Google and Slack. |
+| `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `POSTGRES_URL_NON_POOLING` | Set by the Supabase integration; set them by hand only without it |
 
-3. Deploy, then open `https://YOUR-APP/api/health`. It reports which integrations are configured (never their values).
-4. Cron: `vercel.json` runs `/api/cron/sync` daily at 05:00 UTC (also the moment of the Slack morning summary), which is the Hobby plan limit. On Pro, change it to e.g. `*/15 * * * *` for a tighter safety net.
+Then open `https://YOUR-APP/api/health`. It shows which parts are configured (never their values).
+
+Cron: `vercel.json` runs `/api/cron/sync` daily at 05:00 UTC, which is the Hobby plan limit. On Pro you can run it more often.
 
 ## Slack
 

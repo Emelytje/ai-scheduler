@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/migrate.mjs && next build",
     "start": "next start",
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node scripts/build-preview.mjs && vitest run -c vitest.e2e.config.ts",
     "build:preview": "node scripts/build-preview.mjs",
-    "test:db": "for f in supabase/migrations/*.sql; do psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f \"$f\" || exit 1; done && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f supabase/tests/db_test.sql"
+    "test:db": "for f in supabase/migrations/*.sql; do psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f \"$f\" || exit 1; done && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f supabase/tests/db_test.sql",
+    "migrate": "node scripts/migrate.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -24,6 +25,7 @@
     "date-fns": "^4.4.0",
     "jose": "^6.2.13",
     "next": "^16.4.3",
+    "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "server-only": "^0.0.1",

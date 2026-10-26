@@ -1,15 +1,25 @@
 import "server-only";
+import { deriveSecret } from "./derive";
 
 /** Server configuration. Missing Supabase settings switch the app to demo mode. */
+const e = process.env;
+const first = (...values: (string | undefined)[]) => values.find((v) => v && v.trim()) ?? "";
+// Names set by hand, or by Vercel's Supabase integration (SUPABASE_URL, SUPABASE_ANON_KEY, …).
+const supabaseServiceKey = first(e.SUPABASE_SERVICE_ROLE_KEY, e.SUPABASE_SECRET_KEY);
+const derived = (purpose: string, encoding: "base64" | "hex") =>
+  supabaseServiceKey ? deriveSecret(supabaseServiceKey, purpose).toString(encoding) : "";
+
 export const env = {
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
-  supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  supabaseUrl: first(e.NEXT_PUBLIC_SUPABASE_URL, e.SUPABASE_URL),
+  supabaseAnonKey: first(e.NEXT_PUBLIC_SUPABASE_ANON_KEY, e.SUPABASE_ANON_KEY, e.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, e.SUPABASE_PUBLISHABLE_KEY),
+  supabaseServiceKey,
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
-  appUrl: (process.env.APP_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")).replace(/\/$/, ""),
-  tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY ?? "",
-  embedSigningSecret: process.env.EMBED_SIGNING_SECRET ?? "",
+  // APP_URL, else the project's production domain that Vercel provides, else this deployment's URL.
+  appUrl: (e.APP_URL || (e.VERCEL_PROJECT_PRODUCTION_URL ? `https://${e.VERCEL_PROJECT_PRODUCTION_URL}` : e.VERCEL_URL ? `https://${e.VERCEL_URL}` : "http://localhost:3000")).replace(/\/$/, ""),
+  // Optional: derived from the service-role key when not set.
+  tokenEncryptionKey: first(e.TOKEN_ENCRYPTION_KEY) || derived("token-encryption", "base64"),
+  embedSigningSecret: first(e.EMBED_SIGNING_SECRET) || derived("embed-signing", "hex"),
   embedAllowedOrigins: (process.env.EMBED_ALLOWED_ORIGINS ?? "").split(/[\s,]+/).filter(Boolean),
   cronSecret: process.env.CRON_SECRET ?? "",
   slackClientId: process.env.SLACK_CLIENT_ID ?? "",
