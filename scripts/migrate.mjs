@@ -7,7 +7,17 @@ import pg from "pg";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Vercel's Supabase integration sets POSTGRES_URL_NON_POOLING (direct connection, needed for locks).
-const url = process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+// With a custom prefix in the integration the name ends in _POSTGRES_URL_NON_POOLING.
+const withSuffix = (suffix) => {
+  const key = Object.keys(process.env).sort().find((k) => k.endsWith(suffix) && process.env[k]);
+  return key ? process.env[key] : "";
+};
+const url =
+  process.env.POSTGRES_URL_NON_POOLING ||
+  process.env.DATABASE_URL ||
+  withSuffix("POSTGRES_URL_NON_POOLING") ||
+  process.env.POSTGRES_URL ||
+  withSuffix("POSTGRES_URL");
 if (!url) {
   console.log("migrate: no database URL set, skipping (demo mode)");
   process.exit(0);

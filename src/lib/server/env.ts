@@ -1,17 +1,19 @@
 import "server-only";
+import { supabaseEnv } from "@/lib/supabase-env";
 import { deriveSecret } from "./derive";
 
 /** Server configuration. Missing Supabase settings switch the app to demo mode. */
 const e = process.env;
 const first = (...values: (string | undefined)[]) => values.find((v) => v && v.trim()) ?? "";
-// Names set by hand, or by Vercel's Supabase integration (SUPABASE_URL, SUPABASE_ANON_KEY, …).
-const supabaseServiceKey = first(e.SUPABASE_SERVICE_ROLE_KEY, e.SUPABASE_SECRET_KEY);
+// Names set by hand, or by Vercel's Supabase integration (any custom prefix).
+const supabase = supabaseEnv(e);
+const supabaseServiceKey = supabase.serviceKey;
 const derived = (purpose: string, encoding: "base64" | "hex") =>
   supabaseServiceKey ? deriveSecret(supabaseServiceKey, purpose).toString(encoding) : "";
 
 export const env = {
-  supabaseUrl: first(e.NEXT_PUBLIC_SUPABASE_URL, e.SUPABASE_URL),
-  supabaseAnonKey: first(e.NEXT_PUBLIC_SUPABASE_ANON_KEY, e.SUPABASE_ANON_KEY, e.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, e.SUPABASE_PUBLISHABLE_KEY),
+  supabaseUrl: supabase.url,
+  supabaseAnonKey: supabase.anonKey,
   supabaseServiceKey,
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",

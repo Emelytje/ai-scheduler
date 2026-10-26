@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { supabaseEnv } from "@/lib/supabase-env";
 
 /** Origins allowed to iframe /embed, read per request so changing the env var needs no rebuild. */
 function embedResponse() {
@@ -12,12 +13,7 @@ function embedResponse() {
 /** Keeps the Supabase session cookie fresh on page loads (Server Components can't write cookies). */
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === "/embed") return embedResponse();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY;
+  const { url, anonKey: key } = supabaseEnv(process.env);
   if (!url || !key) return NextResponse.next();
   let response = NextResponse.next({ request });
   const supabase = createServerClient(url, key, {
