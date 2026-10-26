@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: supabase/postgres:17.11.0.006
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["54322:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:54322/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - name: Database migration + RLS tests
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          npm run test:db
+      - run: npm run build
+      - name: Browser tests (demo preview)
+        run: |
+          npm i --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+          npm run test:e2e

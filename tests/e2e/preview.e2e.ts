@@ -7,7 +7,8 @@ import type { SchedulerState } from "@/lib/client/types";
 
 // Uses the Playwright + Chromium preinstalled on the machine (see README).
 const { chromium } = createRequire(import.meta.url)("playwright") as typeof import("playwright");
-const FILE = `file://${path.resolve(__dirname, "../../preview-dist/standalone.html")}`;
+// E2E_URL targets a running server (e.g. next start); default is the single-file preview build.
+const FILE = process.env.E2E_URL ?? `file://${path.resolve(__dirname, "../../preview-dist/standalone.html")}`;
 const SHOTS = process.env.E2E_SCREENSHOTS;
 
 let browser: Browser;

@@ -19,12 +19,14 @@ export interface SchedulerAppProps {
   /** Re-load interval; each load re-plans against the current time and calendar. */
   refreshMs?: number;
   title?: string;
+  /** Extra controls at the end of the top bar (e.g. account links). */
+  headerExtra?: React.ReactNode;
 }
 
 type Rail = "tasks" | "settings";
 type FormState = null | { mode: "new" } | { mode: "edit"; taskId: string };
 
-export function SchedulerApp({ client, variant = "full", connectUrl, onDisconnect, refreshMs = 60_000, title = "AI Scheduler" }: SchedulerAppProps) {
+export function SchedulerApp({ client, variant = "full", connectUrl, onDisconnect, refreshMs = 60_000, title = "AI Scheduler", headerExtra }: SchedulerAppProps) {
   const [state, setState] = useState<SchedulerState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -167,6 +169,7 @@ export function SchedulerApp({ client, variant = "full", connectUrl, onDisconnec
             Settings
           </button>
         </div>
+        {headerExtra}
       </header>
 
       {state.mode === "demo" && !embed && (
