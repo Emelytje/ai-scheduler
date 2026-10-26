@@ -30,7 +30,7 @@ export function LiveApp({ variant = "full", token = null }: { variant?: "full" |
         variant === "full" ? (
           <div className="as-row">
             <a className="as-btn is-ghost" href="/developers">
-              Embed
+              Integrations
             </a>
             <form action="/auth/signout" method="post">
               <button className="as-btn is-ghost">Sign out</button>

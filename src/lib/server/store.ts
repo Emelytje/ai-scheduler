@@ -256,11 +256,18 @@ export async function userForChannel(channelId: string): Promise<{ userId: strin
   return row ? { userId: row.user_id, token: row.channel_token } : null;
 }
 
-export async function listConnectedUsers(): Promise<{ user_id: string; channel_expires_at: string | null }[]> {
-  return check(await supabaseAdmin().from("google_connections").select("user_id, channel_expires_at").is("error", null)) as {
+/** Everyone the daily job should re-plan: connected calendars plus linked Slack users. */
+export async function listUsersToRefresh(): Promise<{ userId: string; channelExpiresAt: string | null; google: boolean }[]> {
+  const db = supabaseAdmin();
+  const google = check(await db.from("google_connections").select("user_id, channel_expires_at").is("error", null)) as {
     user_id: string;
     channel_expires_at: string | null;
   }[];
+  const slack = check(await db.from("slack_links").select("user_id")) as { user_id: string }[];
+  const out = new Map<string, { userId: string; channelExpiresAt: string | null; google: boolean }>();
+  for (const g of google) out.set(g.user_id, { userId: g.user_id, channelExpiresAt: g.channel_expires_at, google: true });
+  for (const s of slack) if (!out.has(s.user_id)) out.set(s.user_id, { userId: s.user_id, channelExpiresAt: null, google: false });
+  return [...out.values()];
 }
 
 export async function userForApiKey(keyHash: string): Promise<string | null> {

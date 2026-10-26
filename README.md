@@ -1,6 +1,6 @@
 # AI Scheduler
 
-Puts every task on the calendar automatically. Tasks have a duration, deadline, priority and optional "not before" date. The planner places them in free working time around Google Calendar meetings, deadline first. When a meeting moves or a task runs over, it re-plans the rest of the week and flags anything that will miss its deadline. There's a day/week calendar and a task list, and the whole view can be embedded in another app.
+Puts every task on the calendar automatically, in the web app, embedded in another app, or from Slack. Tasks have a duration, deadline, priority and optional "not before" date. The planner places them in free working time around Google Calendar meetings, deadline first. When a meeting moves or a task runs over, it re-plans the rest of the week and flags anything that will miss its deadline. There's a day/week calendar and a task list, and the whole view can be embedded in another app.
 
 Stack: Next.js 16 (App Router) · TypeScript · Supabase (Postgres + Auth) · Google Calendar API · Vercel.
 
@@ -14,6 +14,8 @@ Stack: Next.js 16 (App Router) · TypeScript · Supabase (Postgres + Auth) · Go
 | Embedding (iframe + `embed.js`, postMessage, frame allow-list) | ✅ Verified (demo mode) | Browser test from a separate host origin, plus a blocked-origin check (`tests/e2e/embed.e2e.ts`) |
 | Database schema, RLS, atomic block replacement | ✅ Verified | `supabase/tests/db_test.sql` on Supabase's Postgres 17 image |
 | Embed tokens, Google event mapping | ✅ Verified | Unit tests |
+| Slack: `/plan` parsing, request signatures, messages, alert de-duplication, link tokens | ✅ Verified | 14 unit tests in `tests/slack.test.ts`; Slack tables covered by the DB tests |
+| Slack against a real workspace (install, `/plan`, buttons, DMs) | ⚠️ Not verified | Needs a Slack app and a public HTTPS URL |
 | API routes against a real Supabase project | ⚠️ Not verified | Builds and type-checks; needs a Supabase project to run |
 | Supabase Auth sign-in (magic link / Google) | ⚠️ Not verified | Needs a Supabase project |
 | Google Calendar OAuth, sync, push notifications, write-back | ⚠️ Not verified | Needs Google OAuth credentials and a public HTTPS URL |
@@ -55,7 +57,7 @@ For the embed browser test, start the app with `EMBED_ALLOWED_ORIGINS=http://loc
 
 ### 1. Supabase
 1. Create a project at supabase.com.
-2. Run `supabase/migrations/0001_init.sql`, either in the SQL editor or with `npx supabase link && npx supabase db push`.
+2. Run `supabase/migrations/0001_init.sql` and then `0002_slack.sql`, either in the SQL editor or with `npx supabase link && npx supabase db push`.
 3. Go to **Authentication → URL Configuration**. Set Site URL to your app URL and add `https://YOUR-APP/auth/callback` to the redirect URLs.
 4. Optional: to offer "Continue with Google" sign-in, enable Google under **Authentication → Providers**. Email magic links work without this.
 5. From **Project Settings → API**, copy the project URL, the anon (publishable) key and the service role (secret) key.
@@ -79,9 +81,28 @@ For the embed browser test, start the app with `EMBED_ALLOWED_ORIGINS=http://loc
 | `EMBED_SIGNING_SECRET` | `openssl rand -hex 32` |
 | `EMBED_ALLOWED_ORIGINS` | Origins of the host apps that may iframe `/embed`, space separated |
 | `CRON_SECRET` | `openssl rand -hex 32` (Vercel Cron sends it automatically) |
+| `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET` | Optional; see [Slack](#slack) |
 
 3. Deploy, then open `https://YOUR-APP/api/health`. It reports which integrations are configured (never their values).
-4. Cron: `vercel.json` runs `/api/cron/sync` daily, which is the Hobby plan limit. On Pro, change it to e.g. `*/15 * * * *` for a tighter safety net.
+4. Cron: `vercel.json` runs `/api/cron/sync` daily at 05:00 UTC (also the moment of the Slack morning summary), which is the Hobby plan limit. On Pro, change it to e.g. `*/15 * * * *` for a tighter safety net.
+
+## Slack
+
+What users get:
+- `/plan` (or `/plan today`): the rest of today's plan, with **Done** buttons. The block in progress also gets **+30 min**.
+- `/plan week`: the next 7 days. `/plan risks`: tasks that will miss their deadline.
+- `/plan add Send quote to Smits 1h30 by fri 17:00 !high`: adds a task and replies with when it will be finished. It also accepts `after <day>`, `today`/`tomorrow`/`mon`–`sun`/`30/10`/`2026-10-30`, `17:00`/`5pm`, and `!urgent|!high|!low`.
+- **A direct message when a task starts to miss its deadline.** Each task and status is sent once; it's sent again if a task recovers and then slips again.
+- **A morning summary** from the daily job, skipped when there's nothing planned and nothing at risk.
+
+Setup:
+1. Open `https://YOUR-APP/api/slack/manifest` and copy the JSON. It already contains your URLs.
+2. Go to api.slack.com/apps → **Create New App → From a manifest**, pick the workspace and paste the JSON.
+3. Under **Basic Information**, copy the Client ID, Client Secret and Signing Secret into Vercel as `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and `SLACK_SIGNING_SECRET`, then redeploy.
+4. In the planner, go to **Integrations → Add to Slack**. This installs the bot in the workspace and links your own Slack account.
+5. Colleagues type `/plan connect` in Slack, click the link, sign in and confirm.
+
+The app only asks for the `commands` and `chat:write` scopes, so it can't read channels or messages. Every request from Slack is checked against the signing secret, and requests older than 5 minutes are refused. Bot tokens are encrypted like the Google tokens. If the client's workspace already has a `/plan` command, rename it in the manifest.
 
 ## Embedding in another app
 
@@ -113,6 +134,7 @@ src/lib/scheduler/   engine.ts (planning rules), time.ts, seed.ts (demo + test d
 src/lib/client/      SchedulerClient interface; DemoClient (browser) and ApiClient (server)
 src/lib/server/      env, auth, Supabase store, Google OAuth/sync/write-back, planner orchestration
 src/lib/google/      pure Google event mapping
+src/lib/slack/       /plan parsing, Block Kit messages, alert logic, signature check (pure, tested)
 src/components/      SchedulerApp, CalendarView, TaskList, TaskForm, Inspector, SettingsPanel
 src/app/             pages (/, /login, /embed, /developers) and API routes (/api/*)
 supabase/            migration and database tests
@@ -120,6 +142,7 @@ tests/               unit tests; tests/e2e browser tests
 ```
 
 ## Next steps (paid per workspace)
+- **Slack:** an App Home tab with the week view, and posting in the client's existing "Dependables" bot instead of a separate app.
 - **Team scheduling:** add `workspaces` and `workspace_members`, and plan across members' free time. The engine already takes events and tasks as plain inputs.
 - **Outlook:** add a Microsoft Graph provider next to `src/lib/server/google.ts`. `CalendarEvent.source` and the connection model are provider-neutral.
 - **Auto-tasks** from a builder's project page or a seller's campaigns: create tasks through the API with `source` set (e.g. `campaign:123`). The column already exists.

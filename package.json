@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "test:e2e": "node scripts/build-preview.mjs && vitest run -c vitest.e2e.config.ts",
     "build:preview": "node scripts/build-preview.mjs",
-    "test:db": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f supabase/migrations/0001_init.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f supabase/tests/db_test.sql"
+    "test:db": "for f in supabase/migrations/*.sql; do psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -q -f \"$f\" || exit 1; done && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f supabase/tests/db_test.sql"
   },
   "engines": {
     "node": ">=20"

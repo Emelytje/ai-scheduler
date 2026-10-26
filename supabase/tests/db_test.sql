@@ -13,6 +13,8 @@ insert into public.tasks (id, user_id, title, estimate_minutes) values
   ('10000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000b', 'B task', 60);
 insert into public.google_connections (user_id, refresh_token_enc) values ('00000000-0000-0000-0000-00000000000a', 'secret');
 insert into public.api_keys (user_id, name, key_hash, key_prefix) values ('00000000-0000-0000-0000-00000000000a', 'k', 'hash', 'ais_x');
+insert into public.slack_installations (team_id, bot_user_id, bot_token_enc) values ('T1', 'B1', 'secret');
+insert into public.slack_links (team_id, slack_user_id, user_id) values ('T1', 'U1', '00000000-0000-0000-0000-00000000000a');
 
 -- Blocks for A: one finished, one running, two future. "now" = 2026-10-26 10:00Z.
 insert into public.scheduled_blocks (id, user_id, task_id, start_at, end_at, google_event_id) values
@@ -68,6 +70,10 @@ begin
   if n <> 0 then raise exception 'FAIL: tokens readable by user'; end if;
   select count(*) into n from api_keys;
   if n <> 0 then raise exception 'FAIL: api keys readable by user'; end if;
+  select count(*) into n from slack_installations;
+  if n <> 0 then raise exception 'FAIL: slack installations readable by user'; end if;
+  select count(*) into n from slack_links;
+  if n <> 0 then raise exception 'FAIL: slack links readable by user'; end if;
   begin
     insert into tasks (user_id, title, estimate_minutes) values ('00000000-0000-0000-0000-00000000000b', 'sneaky', 30);
     raise exception 'FAIL: A inserted a task for B';

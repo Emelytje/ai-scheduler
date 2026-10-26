@@ -1,10 +1,11 @@
 import "server-only";
 import { after } from "next/server";
-import { plan } from "@/lib/scheduler/engine";
+import { estimateAfterOverrun, plan } from "@/lib/scheduler/engine";
 import type { SchedulerState } from "@/lib/client/types";
 import type { Settings } from "@/lib/scheduler/types";
 import { GoogleAuthError, fetchEvents, writeBack } from "./google";
-import { isGoogleConfigured } from "./env";
+import { isGoogleConfigured, isSlackConfigured } from "./env";
+import { notifyDeadlineRisks } from "./slack";
 import { Store, type StoredBlock } from "./store";
 
 const SYNC_WINDOW_DAYS = 60;
@@ -63,6 +64,24 @@ export async function replanForUser(userId: string, opts: { trigger: string; syn
   const deleted = stored.filter((b) => new Date(b.end) > now && !resultIds.has(b.id));
   if (created.length || updated.length || deleted.length) await store.replaceUnfinishedBlocks(now, unfinished);
 
+  const state: SchedulerState = {
+    mode: "live",
+    tasks,
+    events,
+    blocks: result.blocks,
+    plans: result.plans,
+    settings,
+    calendar: {
+      provider: connection ? "google" : null,
+      connected: !!connection && !calendarError,
+      email: connection?.email ?? null,
+      lastSyncAt: connection?.last_sync_at ?? null,
+      error: calendarError,
+    },
+    lastPlannedAt: result.computedAt,
+    lastPlanMs: result.durationMs,
+  };
+
   const totalMs = performance.now() - started;
   const canWrite = connection && connection.write_blocks && !connection.error && isGoogleConfigured();
   after(async () => {
@@ -83,23 +102,19 @@ export async function replanForUser(userId: string, opts: { trigger: string; syn
         deleted: deleted.length,
       })
       .catch((e) => console.error("plan run log failed", e));
+    if (isSlackConfigured()) await notifyDeadlineRisks(userId, state).catch((e) => console.error("slack alert failed", userId, e));
   });
 
-  return {
-    mode: "live",
-    tasks,
-    events,
-    blocks: result.blocks,
-    plans: result.plans,
-    settings,
-    calendar: {
-      provider: connection ? "google" : null,
-      connected: !!connection && !calendarError,
-      email: connection?.email ?? null,
-      lastSyncAt: connection?.last_sync_at ?? null,
-      error: calendarError,
-    },
-    lastPlannedAt: result.computedAt,
-    lastPlanMs: result.durationMs,
-  };
+  return state;
+}
+
+/** "This task needs N more minutes": grow the estimate from the current plan and re-plan. */
+export async function addTimeToTask(userId: string, taskId: string, extraMinutes: number, trigger = "overrun"): Promise<SchedulerState> {
+  // Re-plan first so worked/locked minutes reflect the current time.
+  const current = await replanForUser(userId, { trigger: `${trigger}-check`, sync: "never" });
+  const task = current.tasks.find((t) => t.id === taskId);
+  const p = current.plans[taskId];
+  if (!task || !p) throw new Error("Task not found");
+  await new Store(userId).updateTask(taskId, { estimateMinutes: estimateAfterOverrun(task, p, extraMinutes) });
+  return replanForUser(userId, { trigger, sync: "never" });
 }
