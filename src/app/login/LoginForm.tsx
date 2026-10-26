@@ -3,7 +3,18 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { useMemo, useState } from "react";
 
-export function LoginForm({ supabaseUrl, supabaseAnonKey, appUrl }: { supabaseUrl: string; supabaseAnonKey: string; appUrl: string }) {
+export function LoginForm({
+  supabaseUrl,
+  supabaseAnonKey,
+  appUrl,
+  google,
+}: {
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  appUrl: string;
+  /** Only true when Google is enabled under Supabase → Authentication → Providers. */
+  google: boolean;
+}) {
   const supabase = useMemo(() => createBrowserClient(supabaseUrl, supabaseAnonKey), [supabaseUrl, supabaseAnonKey]);
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
@@ -23,13 +34,15 @@ export function LoginForm({ supabaseUrl, supabaseAnonKey, appUrl }: { supabaseUr
 
   return (
     <div className="as-panel" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-      <button
-        className="as-btn"
-        style={{ justifyContent: "center", padding: "8px 12px" }}
-        onClick={() => supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } })}
-      >
-        Continue with Google
-      </button>
+      {google && (
+        <button
+          className="as-btn"
+          style={{ justifyContent: "center", padding: "8px 12px" }}
+          onClick={() => supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } })}
+        >
+          Continue with Google
+        </button>
+      )}
       <form onSubmit={sendLink} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <label className="as-field">
           <span>Work email</span>
